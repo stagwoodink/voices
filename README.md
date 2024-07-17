@@ -4,6 +4,6 @@
 
 There's no setup, no commands—just smart, independent operation that feels like a natural extension of your server. 
 
-And as a bonus, it won't clutter your member list with another 'bot'. 
+And as a bonus, **voiceless** is invisible and won't clutter your member list with another 'bot'. 
 
 Upgrade your Discord effortlessly with **voiceless** *coming soon*!
