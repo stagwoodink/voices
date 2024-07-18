@@ -99,7 +99,11 @@ async def on_voice_state_update(member, before, after):
 async def create_and_move_to_channel(member, category, channel_name):
     logger = setup_logger(member.guild.id)
     try:
-        new_channel = await category.create_voice_channel(channel_name)
+        # Create channel with default permissions and manage channel permission for the member
+        overwrites = {
+            member: discord.PermissionOverwrite(manage_channels=True)
+        }
+        new_channel = await category.create_voice_channel(channel_name, overwrites=overwrites)
         await member.move_to(new_channel)
         logger.info(f"Created and moved {member.name} to channel {channel_name} in {category.guild.name}")
     except discord.Forbidden:
@@ -110,7 +114,7 @@ async def create_and_move_to_channel(member, category, channel_name):
             retry_after = int(e.response.headers['Retry-After']) / 1000
             logger.warning(f"Rate limited. Retrying after {retry_after} seconds.")
             await asyncio.sleep(retry_after)
-            new_channel = await category.create_voice_channel(channel_name)
+            new_channel = await category.create_voice_channel(channel_name, overwrites=overwrites)
             await member.move_to(new_channel)
     except Exception as e:
         logger.error(f"Unexpected error when creating/moving channel for {member.name}: {e}")
