@@ -1,5 +1,5 @@
 # voices
-![voices](banner.png)
+![voices](brand_banner.png)
 ## voices - enhanced voice channel management
 **Voices** works quietly in the background, keeping your Discord server sleek and tidy. Creating personalized voice channels as needed and quickly cleaning them up when they're no longer in use. 
 
