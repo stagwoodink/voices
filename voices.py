@@ -14,7 +14,7 @@ MONGO_URI = os.getenv('MONGO_URI')
 # Connect to MongoDB with error handling
 db_available = True
 try:
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000, username=os.getenv('MONGO_USER'), password=os.getenv('MONGO_PASS'))
     db = client['voices']
     logs_collection = db['logs']
     client.server_info()
@@ -31,8 +31,11 @@ intents.voice_states = True
 bot = discord.Client(intents=intents)
 queue = asyncio.Queue()
 created_channels = {}
+trigger_channel_ids = {}
 
 TRIGGER_CHANNEL_NAME = "➕︱voices"
+ADMIN_PERMISSION_MESSAGE = "Hi {user}, the bot needs admin permissions to function properly. Please re-invite it with admin permissions using this link: {invite_link}"
+INVITE_LINK = "https://discord.com/oauth2/authorize?client_id=1263237947461996605&permissions=8&integration_type=0&scope=bot"
 
 def sanitize_nickname(nickname):
     return re.sub(r'[^a-zA-Z0-9-_]', '', nickname)[:32]
@@ -46,8 +49,6 @@ async def log_event(event_type, guild, **kwargs):
             "timestamp": datetime.now(),
             **kwargs
         })
-    # Uncomment the following line to enable logging to terminal
-    # print(f"Logged event: {event_type}, Details: {kwargs}")
 
 async def update_status():
     await bot.wait_until_ready()
@@ -84,14 +85,30 @@ async def ensure_trigger_channel(guild):
             trigger_channel = await guild.create_voice_channel(TRIGGER_CHANNEL_NAME)
             await log_event("trigger_channel_created", guild, channel=TRIGGER_CHANNEL_NAME)
             await trigger_channel.edit(position=0)
+            trigger_channel_ids[guild.id] = trigger_channel.id
         except discord.Forbidden:
-            await log_event("error", guild, error="Missing permissions to create the trigger channel")
+            await notify_missing_permissions(guild)
         except discord.HTTPException as e:
             await log_event("error", guild, error=f"HTTPException: {e}")
+    else:
+        trigger_channel_ids[guild.id] = trigger_channel.id
+
+async def notify_missing_permissions(guild):
+    inviter = await get_inviter(guild)
+    if inviter:
+        await inviter.send(ADMIN_PERMISSION_MESSAGE.format(user=inviter.name, invite_link=INVITE_LINK))
+    await guild.leave()
+    await log_event("left_guild_due_to_permissions", guild)
+
+async def get_inviter(guild):
+    async for entry in guild.audit_logs(action=discord.AuditLogAction.bot_add, limit=1):
+        if entry.target.id == bot.user.id:
+            return entry.user
+    return None
 
 @bot.event
 async def on_voice_state_update(member, before, after):
-    if after.channel and after.channel.name == TRIGGER_CHANNEL_NAME:
+    if after.channel and after.channel.id == trigger_channel_ids.get(member.guild.id):
         await handle_new_voice_channel(member, after.channel)
     if before.channel and before.channel != after.channel:
         await check_empty_channel(before.channel)
@@ -125,6 +142,8 @@ async def create_and_move_to_channel(member, category, channel_name):
 async def check_empty_channel(channel):
     if isinstance(channel, discord.VoiceChannel) and len(channel.members) == 0:
         if channel.id in created_channels:
+            await delete_empty_channel(channel)
+        elif not db_available:
             await delete_empty_channel(channel)
 
 async def delete_empty_channel(channel):
