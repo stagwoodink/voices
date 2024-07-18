@@ -34,7 +34,7 @@ created_channels = {}
 trigger_channel_ids = {}
 
 TRIGGER_CHANNEL_NAME = "➕︱voices"
-ADMIN_PERMISSION_MESSAGE = "Hi {user}, the bot needs admin permissions to function properly. Please re-invite it with admin permissions using this link: {invite_link}"
+ADMIN_PERMISSION_MESSAGE = "# Hello\n**Sorry**, but I need **admin permissions** to function properly. Please **re-invite** me with admin permissions using this link: {invite_link}"
 INVITE_LINK = "https://discord.com/oauth2/authorize?client_id=1263237947461996605&permissions=8&integration_type=0&scope=bot"
 
 def sanitize_nickname(nickname):
