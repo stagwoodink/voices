@@ -13,4 +13,4 @@ If you're having any issues with Voices, we're here to help. Join our Discord se
 ## Support The Project
 **Stagwood's Voices** will always be 100% free to use and open source, we will never charge you for extra features or support. 
 
-That being said, hosting is not free so we appreciate everyone who subscribes to our discord server as they help keep the lights on.
+That being said, hosting is not free so everyone who subscribes to the discord server is greatly appreciated, as they help keep the lights on.
