@@ -21,7 +21,7 @@ bot = discord.Client(intents=intents)
 queue = asyncio.Queue()
 created_channels = {}
 
-TRIGGER_CHANNEL_NAME = "➕︱voices"
+TRIGGER_CHANNEL_NAME = "voices"
 ADMIN_PERMISSION_MESSAGE = "# Hello\n**Sorry**, but I need **admin permissions** to function properly. Please **re-invite** me with admin permissions using this link: {invite_link}"
 INVITE_LINK = "https://discord.com/oauth2/authorize?client_id=1263237947461996605&permissions=8&integration_type=0&scope=bot"
 
