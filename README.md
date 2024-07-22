@@ -1,5 +1,5 @@
 # Voices
-![Voices](brand_banner.png)
+![Voices](banner.png)
 ## Voices - Enhanced Voice Channel Management
 # Voices - Temporary Voice Channel Bot
 
