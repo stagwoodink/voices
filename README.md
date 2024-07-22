@@ -24,7 +24,7 @@ Enhance your Discord server with **Voices**. Create temporary voice channels on 
 2. **User Joins Trigger Channel:** When a user joins the trigger channel, the bot creates a temporary voice channel named after the user’s nickname and moves them into it.
 4. **Channel Cleanup:** When the temporary channel is empty, the bot deletes it to keep your server tidy.
 
-**Make your server more enjoyable with Voices. [Invite Voices](https://discord.com/oauth2/authorize?client_id=1263237947461996605&permissions=8&integration_type=0&scope=bot) today and enjoy a seamless voice channel experience.**
+**Make your server more enjoyable with Voices. [Invite Voices](https://discord.com/oauth2/authorize?client_id=1263237947461996605&permissions=8&integration_type=0&scope=bot) today.**
 
 
 ## Get Help
