@@ -1,27 +1,16 @@
 import os
 import discord
 from dotenv import load_dotenv
-from pymongo import MongoClient, errors
 import asyncio
 import re
-from datetime import datetime
+import yaml
 
 # Load environment variables from .env file
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-MONGO_URI = os.getenv('MONGO_URI')
 
-# Connect to MongoDB with error handling
-db_available = True
-try:
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000, username=os.getenv('MONGO_USER'), password=os.getenv('MONGO_PASS'))
-    db = client['voices']
-    logs_collection = db['logs']
-    client.server_info()
-    print("Connected to MongoDB successfully.")
-except errors.ServerSelectionTimeoutError as err:
-    print(f"MongoDB connection error: {err}")
-    db_available = False
+# YAML file path
+YAML_FILE_PATH = "data.yaml"
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -31,34 +20,37 @@ intents.voice_states = True
 bot = discord.Client(intents=intents)
 queue = asyncio.Queue()
 created_channels = {}
-trigger_channel_ids = {}
 
 TRIGGER_CHANNEL_NAME = "➕︱voices"
 ADMIN_PERMISSION_MESSAGE = "# Hello\n**Sorry**, but I need **admin permissions** to function properly. Please **re-invite** me with admin permissions using this link: {invite_link}"
 INVITE_LINK = "https://discord.com/oauth2/authorize?client_id=1263237947461996605&permissions=8&integration_type=0&scope=bot"
 
+trigger_channel_ids = {}  # Dictionary to store server ID and trigger channel ID
+
 def sanitize_nickname(nickname):
     return re.sub(r'[^a-zA-Z0-9-_]', '', nickname)[:32]
 
-async def log_event(event_type, guild, **kwargs):
-    if db_available:
-        logs_collection.insert_one({
-            "event": event_type,
-            "guild": guild.name,
-            "guild_id": guild.id,
-            "timestamp": datetime.now(),
-            **kwargs
-        })
+def read_yaml():
+    if os.path.exists(YAML_FILE_PATH):
+        with open(YAML_FILE_PATH, "r") as file:
+            return yaml.safe_load(file) or {}
+    return {}
+
+def write_yaml(data):
+    with open(YAML_FILE_PATH, "w") as file:
+        yaml.safe_dump(data, file)
 
 async def update_status():
     await bot.wait_until_ready()
     while not bot.is_closed():
-        status = f"over {len(bot.guilds)} servers" if db_available else "log database sleep"
+        status = f"over {len(bot.guilds)} servers"
         await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=status))
         await asyncio.sleep(600)
 
 @bot.event
 async def on_ready():
+    global trigger_channel_ids
+    trigger_channel_ids = read_yaml()
     for guild in bot.guilds:
         await queue.put(ensure_trigger_channel(guild))
     bot.loop.create_task(process_queue())
@@ -75,7 +67,7 @@ async def process_queue():
         try:
             await task
         except discord.DiscordServerError as e:
-            await log_event("error", task.guild, error=str(e))
+            print(f"DiscordServerError: {e}")
         await asyncio.sleep(1)
 
 async def ensure_trigger_channel(guild):
@@ -83,22 +75,22 @@ async def ensure_trigger_channel(guild):
     if not trigger_channel:
         try:
             trigger_channel = await guild.create_voice_channel(TRIGGER_CHANNEL_NAME)
-            await log_event("trigger_channel_created", guild, channel=TRIGGER_CHANNEL_NAME)
             await trigger_channel.edit(position=0)
             trigger_channel_ids[guild.id] = trigger_channel.id
+            write_yaml(trigger_channel_ids)
         except discord.Forbidden:
             await notify_missing_permissions(guild)
         except discord.HTTPException as e:
-            await log_event("error", guild, error=f"HTTPException: {e}")
+            print(f"HTTPException: {e}")
     else:
         trigger_channel_ids[guild.id] = trigger_channel.id
+        write_yaml(trigger_channel_ids)
 
 async def notify_missing_permissions(guild):
     inviter = await get_inviter(guild)
     if inviter:
         await inviter.send(ADMIN_PERMISSION_MESSAGE.format(user=inviter.name, invite_link=INVITE_LINK))
     await guild.leave()
-    await log_event("left_guild_due_to_permissions", guild)
 
 async def get_inviter(guild):
     async for entry in guild.audit_logs(action=discord.AuditLogAction.bot_add, limit=1):
@@ -114,44 +106,53 @@ async def on_voice_state_update(member, before, after):
         await check_empty_channel(before.channel)
 
 async def handle_new_voice_channel(member, after_channel):
+    sanitized_name = sanitize_nickname(member.nick or member.name)
     category = after_channel.category if after_channel else None
-    if category:
-        sanitized_name = sanitize_nickname(member.nick or member.name)
-        user_channel = discord.utils.get(category.voice_channels, name=sanitized_name)
-        if user_channel:
-            await member.move_to(user_channel)
-            await log_event("user_moved", member.guild, member=member.nick or member.name, channel=user_channel.name)
-        else:
-            await queue.put(create_and_move_to_channel(member, category, sanitized_name))
+    user_channel = discord.utils.get(after_channel.guild.voice_channels, name=sanitized_name)
 
-async def create_and_move_to_channel(member, category, channel_name):
+    if user_channel:
+        await member.move_to(user_channel)
+    else:
+        await queue.put(create_and_move_to_channel(member, after_channel, sanitized_name, category))
+
+async def create_and_move_to_channel(member, after_channel, channel_name, category):
     try:
-        new_channel = await category.create_voice_channel(channel_name)
+        overwrite_permissions = {
+            member: discord.PermissionOverwrite(
+                manage_channels=True,
+                connect=True,
+                speak=True,
+                manage_permissions=True
+            )
+        }
+        new_channel = await (category.create_voice_channel(channel_name, overwrites=overwrite_permissions) if category else after_channel.guild.create_voice_channel(channel_name, overwrites=overwrite_permissions))
+        
+        if not category:
+            await new_channel.edit(position=after_channel.position + 1)
+        
         created_channels[new_channel.id] = {
             "guild_id": member.guild.id,
             "channel_id": new_channel.id
         }
         await member.move_to(new_channel)
-        await log_event("channel_created", member.guild, member=member.nick or member.name, channel=channel_name, channel_id=new_channel.id)
     except (discord.Forbidden, discord.HTTPException) as e:
-        await log_event("error", member.guild, error=str(e))
+        print(f"Error creating or moving to channel: {e}")
         if isinstance(e, discord.HTTPException) and e.status == 429:
             await asyncio.sleep(int(e.response.headers['Retry-After']) / 1000)
-            await create_and_move_to_channel(member, category, channel_name)
+            await create_and_move_to_channel(member, after_channel, channel_name, category)
 
 async def check_empty_channel(channel):
+    await asyncio.sleep(1)  # Add a delay to check if the channel is still empty
     if isinstance(channel, discord.VoiceChannel) and len(channel.members) == 0:
         if channel.id in created_channels:
-            await delete_empty_channel(channel)
-        elif not db_available:
             await delete_empty_channel(channel)
 
 async def delete_empty_channel(channel):
     try:
         await channel.delete()
-        await log_event("channel_deleted", channel.guild, channel=channel.name)
+        del created_channels[channel.id]
     except (discord.Forbidden, discord.HTTPException) as e:
-        await log_event("error", channel.guild, error=str(e))
+        print(f"Error deleting channel: {e}")
         if isinstance(e, discord.HTTPException) and e.status == 429:
             await asyncio.sleep(int(e.response.headers['Retry-After']) / 1000)
             await delete_empty_channel(channel)
