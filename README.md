@@ -1,8 +1,5 @@
-# Voices
 ![Voices](banner.png)
-## Voices - Enhanced Voice Channel Management
-# Voices - Temporary Voice Channel Bot
-
+# Voices - Enhanced Voice Channel Management
 Enhance your Discord server with **Voices**. Create temporary voice channels on demand, providing a clean and enjoyable user experience. No setup, no configuration – it simply works.
 
 ## Features:
